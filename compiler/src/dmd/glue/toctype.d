@@ -14,7 +14,11 @@ module dmd.glue.toctype;
 import core.stdc.stdio;
 import core.stdc.stdlib;
 
-import dmd.backend.cc : Classsym, Symbol;
+import dmd.backend.cc : Classsym, SENforward, Symbol;
+import dmd.backend.cdef : SC;
+import dmd.backend.dlist : list_append;
+import dmd.backend.el : el_long;
+import dmd.backend.symbol : symbol_name;
 import dmd.backend.ty;
 import dmd.backend.type;
 
@@ -253,9 +257,24 @@ type* Type_toCtype(Type t)
                 (cast(type*)t.ctype).Tcount++;
                 return cast(type*)t.ctype;
             }
-            else if (symMemtype.toBasetype().ty == Tint32)
+            else if (symMemtype.isIntegral())
             {
                 t.ctype = type_enum(sym.toPrettyChars(true), Type_toCtype(symMemtype));
+                if (driverParams.symdebug && sym.members)
+                {
+                    Symbol* s = cast(Symbol*)(cast(type*)t.ctype).Ttag;
+                    s.Senum.SEflags &= ~SENforward;
+                    type* memctype = Type_toCtype(symMemtype);
+                    foreach (m; *sym.members)
+                    {
+                        EnumMember em = m.isEnumMember();
+                        if (!em)
+                            continue;
+                        Symbol* sf = symbol_name(em.ident.toString(), SC.enum_, memctype);
+                        sf.Svalue = el_long(totym(symMemtype.toBasetype()), em.value().toInteger());
+                        list_append(&s.Senum.SEenumlist, sf);
+                    }
+                }
             }
             else
             {
